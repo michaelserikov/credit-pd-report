@@ -1,0 +1,33 @@
+{
+  "clients": 30000,
+  "default_rate": 0.2212,
+  "test_clients": 9000,
+  "logit_auc": 0.7526370450448333,
+  "logit_gini": 0.5052740900896666,
+  "logit_gini_train": 0.5354213874808764,
+  "logit_ks": 0.39126396935732843,
+  "gb_auc": 0.7733402823764151,
+  "gb_gini": 0.5466805647528301,
+  "gb_ks": 0.4146554344027364,
+  "grade_psi_train_test": 0.0011416891574373123,
+  "grades_rejected_5pct": 0,
+  "grades": 8,
+  "iv": {
+    "pay_last": 0.887,
+    "pay_worst_6m": 0.817,
+    "months_late_6m": 0.687,
+    "limit": 0.174,
+    "pay_ratio_6m": 0.091,
+    "utilisation": 0.066,
+    "age": 0.014
+  },
+  "logit_coef": {
+    "limit": -0.449,
+    "age": -0.121,
+    "pay_last": -0.597,
+    "pay_worst_6m": -0.401,
+    "months_late_6m": -0.183,
+    "utilisation": -0.216,
+    "pay_ratio_6m": -0.071
+  }
+}
