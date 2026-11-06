@@ -24,6 +24,7 @@ from sklearn.model_selection import train_test_split
 ROOT = Path(__file__).parent
 RAW = ROOT / "data" / "default_of_credit_card_clients.xls"
 OUT = ROOT / "powerbi" / "data"
+MODEL = ROOT / "excel" / "data"
 URL = "https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip"
 SEED = 42
 BINS = 6
@@ -83,6 +84,27 @@ class WoE:
         return out
 
 
+def scorecard(woe, lr, pdo=20.0, base_score=600.0, base_odds=50.0):
+    """One row per variable and bin: bounds (lower, upper], WoE, coefficient and scorecard points.
+
+    Points follow the usual scaling: score = offset + factor * ln(good:bad odds), 20 points to double the odds and
+    600 points at odds of 50:1. The intercept and offset are spread evenly over the variables.
+    """
+    factor = pdo / np.log(2)
+    offset = base_score - factor * np.log(base_odds)
+    n = len(woe.tables)
+    rows = []
+    for (col, table), coef in zip(woe.tables.items(), lr.coef_[0]):
+        edges = woe.edges[col]
+        for b, w in table.items():
+            b = int(b)
+            logit_part = coef * w + lr.intercept_[0] / n
+            rows.append({"variable": col, "bin": int(b), "lower": float(edges[b]), "upper": float(edges[b + 1]),
+                         "woe": float(w), "coef": float(coef), "intercept": float(lr.intercept_[0]),
+                         "points": float(offset / n - factor * logit_part)})
+    return pd.DataFrame(rows)
+
+
 def gini(y, p):
     return 2 * roc_auc_score(y, p) - 1
 
@@ -121,7 +143,8 @@ def main():
     rows = []
     for g, group in y_te.groupby(g_te):
         test = binomtest(int(group.sum()), len(group), float(scale[g]))
-        rows.append({"grade": int(g), "master_scale_pd": float(scale[g]), "clients": len(group),
+        rows.append({"grade": int(g), "pd_lower": float(edges[g - 1]), "pd_upper": float(edges[g]),
+                     "master_scale_pd": float(scale[g]), "clients": len(group),
                      "defaults": int(group.sum()), "observed_rate": float(group.mean()),
                      "binomial_p": float(test.pvalue)})
     calibration = pd.DataFrame(rows)
@@ -139,6 +162,7 @@ def main():
 
     # Star schema for Power BI, test sample only so the report shows out-of-sample figures
     OUT.mkdir(parents=True, exist_ok=True)
+    MODEL.mkdir(parents=True, exist_ok=True)
     edu = {1: "Graduate school", 2: "University", 3: "High school"}
     fact = pd.DataFrame({
         "client_id": x_te.index, "grade": g_te.values, "pd_model": p_te.round(5).values, "default": y_te.values,
@@ -151,6 +175,10 @@ def main():
     calibration.to_csv(OUT / "dim_grade.csv", index=False)
     bench = fact.groupby("segment_id").agg(benchmark_default_rate=("default", "mean"), clients=("default", "size")).reset_index()
     bench.to_csv(OUT / "dim_segment.csv", index=False)
+    # Model parameters for the Excel calculator, and a sample of test clients to check it against
+    scorecard(woe, lr).to_csv(MODEL / "scorecard.csv", index=False)
+    check = x_te.sample(25, random_state=SEED).assign(pd_model=p_te, grade=g_te)
+    check.reset_index().rename(columns={"ID": "client_id"}).to_csv(MODEL / "check_clients.csv", index=False)
     (ROOT / "results.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))
     print(calibration.round(4).to_string(index=False))
